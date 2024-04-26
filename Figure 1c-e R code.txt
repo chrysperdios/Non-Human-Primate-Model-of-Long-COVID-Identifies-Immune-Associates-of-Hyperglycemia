@@ -1,0 +1,63 @@
+#load libraries
+library(readxl)
+library(ggpubr)
+library(tidyverse)
+library(vegan)
+
+PlotFonts = font("title", size = 40, face = "bold") + font("xlab", size = 60, face = "bold") + 
+	font("ylab", size = 60, face = "bold") + font("xy.text", size = 60) +
+ 	font("legend.title", size = 60, face = "bold") + font("legend.text", size = 60)
+
+#import files
+Spike = read_excel("Figure 1_Source data file.xlsx", sheet = "Figure 1c")
+
+S1RBD = read_excel("Figure 1_Source data file.xlsx", sheet = "Figure 1d")
+
+NC = read_excel("Figure 1_Source data file.xlsx", sheet = "Figure 1e")
+
+#log2 transform
+S1RBD$S1RBD_Log2 = log2(S1RBD$S1RBD)
+
+Spike$Spike_Log2 = log2(Spike$Spike)
+
+NC$NC_Log2 = log2(NC$Nucleocaspid)
+
+#PERMANOVA
+capture.output(
+	adonis2(Spike$Spike_Log2 ~ Spike$Weeks * Spike$Vaccination * Spike$Immunoglobulin, method = "euclidean"),
+	adonis2(S1RBD$S1RBD_Log2 ~ S1RBD$Weeks * S1RBD$Vaccination * S1RBD$Immunoglobulin, method = "euclidean"),
+	adonis2(NC$NC_Log2 ~ NC$Weeks * NC$Vaccination * NC$Immunoglobulin, method = "euclidean"),
+	file = "PERMANOVA log2 immunoglobulins.txt")
+
+#Spike graph
+Spike_graph = ggscatter(Spike, x = "Weeks", y = "Spike_Log2", ylab = "Spike Ig (Log2 AU/ml)", add = "loess", 
+	color = "Immunoglobulin", conf.int = TRUE, size = NA, ylim = c(-1, 19), legend = "") + border("gray20") + 
+	scale_x_continuous(n.breaks = 10, expand = c(0,0)) + scale_y_continuous(n.breaks = 10, expand = c(0,0)) + 
+	theme(plot.margin = margin(0.5, 1.2, 0.1, 0.1, "cm")) + PlotFonts
+
+png(width = 2000, height = 1000, file = "Figure 1c.png")
+facet(Spike_graph, facet.by = c("Vaccination"), nrow = 1, panel.labs.font = list(size = 60), 
+	panel.labs.font.x = list(size = 60)) + theme(panel.spacing = unit(5,"lines"))
+dev.off()
+
+#S1RBD graph
+S1RBD_graph = ggscatter(S1RBD, x = "Weeks", y = "S1RBD_Log2", ylab = "S1RBD Ig (Log2 AU/ml)", add = "loess", 
+	color = "Immunoglobulin", conf.int = TRUE, size = NA, ylim = c(-1, 19), legend = "") + border("gray20") + 
+	scale_x_continuous(n.breaks = 10, expand = c(0,0)) + scale_y_continuous(n.breaks = 10, expand = c(0,0)) + 
+	theme(plot.margin = margin(0.5, 1.2, 0.1, 0.1, "cm")) + PlotFonts
+
+png(width = 2000, height = 1000, file = "Figure 1d.png")
+facet(S1RBD_graph, facet.by = c("Vaccination"), nrow = 1, panel.labs.font = list(size = 60), 
+	panel.labs.font.x = list(size = 60)) + theme(panel.spacing = unit(5,"lines"))
+dev.off()
+
+#NC graph
+NC_graph = ggscatter(NC, x = "Weeks", y = "NC_Log2", ylab = "NC Ig (Log2 AU/ml)", add = "loess", 
+	color = "Immunoglobulin", conf.int = TRUE, size = NA, ylim = c(-1, 19), legend = "") + border("gray20") + 
+	scale_x_continuous(n.breaks = 10, expand = c(0,0)) + scale_y_continuous(n.breaks = 10, expand = c(0,0)) + 
+	theme(plot.margin = margin(0.5, 1.2, 0.1, 0.1, "cm")) + PlotFonts
+
+png(width = 2000, height = 1000, file = "Figure 1e.png")
+facet(NC_graph, facet.by = c("Vaccination"), nrow = 1, panel.labs.font = list(size = 60), 
+	panel.labs.font.x = list(size = 60)) + theme(panel.spacing = unit(5,"lines"))
+dev.off()
