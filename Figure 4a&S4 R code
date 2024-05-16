@@ -14,8 +14,7 @@ flattenCorrMatrix = function(cormat, pmat) {ut = upper.tri(cormat)
 	cor = (cormat)[ut], p = pmat[ut])}
 	
 #import data
-Figure_4a = read_excel("C:/Users/Chrysostomos Perdios/OneDrive - Tulane University/Clovis/Long Covid paper/Data/Figure 4_Source data file.xlsx", 
-	sheet = "Figure 4a")
+Figure_4a = read_excel("Figure 4_Source data file.xlsx", sheet = "Figure 4a")
 
 Figure_4a = Figure_4a %>% rename("Week1" = "Week1 Glucose (mg/dL)", "Week4" = "Week4 Glucose (mg/dL)", "Week8" = "Week8 Glucose (mg/dL)",
 	"Week16" = "Week16 Glucose (mg/dL)")
