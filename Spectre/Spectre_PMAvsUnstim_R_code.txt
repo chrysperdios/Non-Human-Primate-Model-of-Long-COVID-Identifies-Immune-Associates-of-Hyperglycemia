@@ -1,0 +1,283 @@
+#load and check spectre packages
+library(Spectre)
+package.load() 
+set.seed(1991)
+
+#set import directory, where the exported.csv files are
+setwd("data")
+InputDirectory = getwd()
+#create a dataframe with the smaple values
+data.list = read.files(file.loc = InputDirectory, file.type = ".csv", do.embed.file.names = TRUE)
+check = do.list.summary(data.list)
+cell.dat = do.merge.files(dat = data.list)
+rm(data.list)
+rm(check)
+
+#set metadata directory
+setwd("metadata")
+MetaDirectory = getwd()
+meta.dat = fread("sample_metadata.csv")
+
+#remove data except PMA and Unstimulated
+meta.dat = subset(meta.dat, Group %in% c("PI", "Untreated"))
+
+#subset metadata based on Filename, Sample, Group, Batch OR Sample, Counts df[row, column]
+sample.info = meta.dat[, c(1:4, 6:7)]
+counts = meta.dat[, c(2,5)]
+
+#create an ouput directory 
+dir.create("Output_Spectre_PMAvsUnstim", showWarnings = FALSE)
+setwd("Output_Spectre_PMAvsUnstim")
+OutputDirectory = getwd()
+#create and set a new output subfolder
+dir.create("Output 1 - transformed plots", showWarnings = FALSE)
+setwd("Output 1 - transformed plots")
+
+#delete extra columns if necessary 
+cell.dat = subset(cell.dat, select =- c(V14, V15))
+
+#remove data except PMA and Unstimulated
+wanted = c("Un", "PI")
+cell.dat = cell.dat[grepl(paste(wanted, collapse = "|"), cell.dat$FileName),]
+gc()
+
+#specify which fluor channels will be transformed
+as.matrix(names(cell.dat))
+
+to.asinh = names(cell.dat)[c(3:13)] ##################################################################
+
+#pick a cofactor between 100-1000 (400 reccomended) for tansformation
+
+cofactor = 400 ###################################################################################################
+
+cell.dat = do.asinh(cell.dat, to.asinh, cofactor = cofactor)
+transformed.cols = paste0(to.asinh, "_asinh")
+
+#pick a fluor to plot all the other channels against
+plot.against = "CD4_asinh"
+
+#check the output folders for the newly created plots
+for(i in transformed.cols) {make.colour.plot(do.subsample(cell.dat, 20000), i, plot.against)}
+
+#merge your specified metadata with the dataframe data
+cell.dat = do.add.cols(cell.dat, "FileName", sample.info, "Filename", rmv.ext = TRUE)
+#specify columns that represent cellular features (_asinh)
+as.matrix(names(cell.dat))
+
+cellular.cols = names(cell.dat)[c(16:26)] #########################################################################
+
+#specify the columns that will be used to generate cluster and tSNE/UMAP results
+cluster.cols = names(cell.dat)[c(16:26)] ##########################################################################
+
+#specify sample, group, and batch columns
+exp.name = "Spectre_Harmo_combined" #####################################
+sample.col = "Sample"
+group.col = "Group"
+batch.col = "Batch"
+#check the cell frequencies for eaqch group for downsampling
+data.frame(table(cell.dat[[group.col]]))
+#check the order that the groups appear in the dataset
+unique(cell.dat[[group.col]])
+
+#target subsample numbers from each group (group order as above)
+sub.targets = c(200000, 200000) ##################################################
+gc()
+
+#create and set a new output subfolder
+setwd(OutputDirectory)
+dir.create("Output 3 - clustering", showWarnings = FALSE)
+setwd("Output 3 - clustering")
+
+#re-set cellular and clustering cols
+aligned.cellular.cols = paste0(cellular.cols, '_aligned')
+aligned.cluster.cols = paste0(cluster.cols, '_aligned')
+	
+#we can define the number of desired metaclusters manually, with the meta.k argument (can also use "aligned.cluster.cols")
+cell.dat = run.flowsom(cell.dat, cluster.cols, meta.k = 30) ######################################################
+
+#run dimensionality reduction (DR) on a subset of the data
+cell.sub = do.subsample(cell.dat, sub.targets, group.col)
+# using run.umap though other options are available including run.fitsne and run.tsne (can also use "aligned.cluster.cols")
+cell.sub = run.umap(cell.sub, cluster.cols)
+gc()
+
+#visualise the DR data to asses which clusters represent cellular populations
+make.colour.plot(cell.sub, "UMAP_X", "UMAP_Y", "FlowSOM_metacluster", col.type = 'factor', add.label = TRUE)
+
+#make multiple plots using all fluor (can also use "aligned.cellular.cols")
+make.multi.plot(cell.sub, "UMAP_X", "UMAP_Y", cellular.cols, add.density = TRUE)
+make.multi.plot(cell.sub, "UMAP_X", "UMAP_Y", cellular.cols, add.density = TRUE, divide.by = group.col, figure.title = paste0(
+	"PMA vs Unstimulated Multi Plot"))
+
+#generate multi plots to compare groups/samples
+make.multi.plot(cell.sub, "UMAP_X", "UMAP_Y", "FlowSOM_metacluster", group.col, col.type = 'factor')
+
+#expression heatmap (can also use "aligned.cellular.cols")
+exp = do.aggregate(cell.dat, cellular.cols, by = "FlowSOM_metacluster")
+make.pheatmap(exp, "FlowSOM_metacluster", cellular.cols)
+gc()
+
+#seperate by vaccination
+cell.sub.unvac = subset(cell.sub, Vaccination == "No")
+cell.sub.vac = subset(cell.sub, Vaccination == "Yes")
+
+#make multiple plots using all fluor (can also use "aligned.cellular.cols")
+make.multi.plot(cell.sub.vac, "UMAP_X", "UMAP_Y", cellular.cols, divide.by = group.col, figure.title = paste0(
+	"Vacc PMA vs Unstimulated Multi Plot"))
+
+#generate multi plots to compare groups/samples
+make.multi.plot(cell.sub.vac, "UMAP_X", "UMAP_Y", "FlowSOM_metacluster", group.col, col.type = 'factor', 
+	figure.title = paste0("Vacc Multi Plot"))
+make.multi.plot(cell.sub.vac, "UMAP_X", "UMAP_Y", "FlowSOM_metacluster", sample.col, col.type = 'factor', 
+	figure.title = paste0("Vacc Multi Plot"))
+
+#make multiple plots using all fluor (can also use "aligned.cellular.cols")
+make.multi.plot(cell.sub.unvac, "UMAP_X", "UMAP_Y", cellular.cols, add.density = TRUE, divide.by = group.col, figure.title = paste0(
+	"Unvacc PMA vs Unstimulated Multi Plot"))
+
+#generate multi plots to compare groups/samples
+make.multi.plot(cell.sub.unvac, "UMAP_X", "UMAP_Y", "FlowSOM_metacluster", group.col, col.type = 'factor', 
+	figure.title = paste0("Unvacc Multi Plot"))
+	
+#create and set a new output subfolder
+setwd(OutputDirectory)
+dir.create("Output 4 - annotation", showWarnings = FALSE)
+setwd("Output 4 - annotation")
+
+#create a list of population names, and then specify which clusters make up that population
+annots = list("Pop 1" = c(28), "Pop 2" = c(9, 10, 23), "Pop 3" = c(5, 6, 8, 15), "Pop 4" = c(22),
+	"Pop 5" = c(17, 25), "Pop 6" = c(27, 29), "Pop 7" = c(12, 24), "Pop 8" = c(11), "Pop 9" = c(14, 20),
+ 	"Pop 10" = c(21), "Pop 11" = c(26), "Pop 12" = c(30), "Pop 13" = c(1), "Pop 14" = c(4), 
+	"Pop 15" = c(13), "Pop 16" = c(2), "Pop 17" = c(3), "Pop 18" = c(16), "delete" = c(7, 18, 19)) ####################################################################
+
+#switch the annotation list into a table format to annotate the data
+annots = do.list.switch(annots)
+names(annots) = c("Values", "Population")
+setorderv(annots, 'Values')
+annots
+
+#add annotations
+cell.dat = do.add.cols(cell.dat, "FlowSOM_metacluster", annots, "Values")
+cell.sub = do.add.cols(cell.sub, "FlowSOM_metacluster", annots, "Values")
+
+#recreate UMAP plot with population names
+make.colour.plot(cell.sub, "UMAP_X", "UMAP_Y", "Population", col.type = 'factor', add.label = TRUE)
+make.multi.plot(cell.sub, "UMAP_X", "UMAP_Y", "Population", group.col, col.type = 'factor')
+
+#recreate heatmap with population names (can also use "aligned.cellular.cols")
+exp = do.aggregate(cell.dat, cellular.cols, by = "Population")
+make.pheatmap(exp, "Population", cellular.cols)
+
+#new plots with deleted subpopulations
+cell.dat = subset(cell.dat, Population != "delete")
+cell.sub = subset(cell.sub, Population != "delete")
+
+make.colour.plot(cell.sub, "UMAP_X", "UMAP_Y", "Population", col.type = 'factor', add.label = TRUE,
+	title = paste0("New Population"))
+
+make.multi.plot(cell.sub, "UMAP_X", "UMAP_Y", cellular.cols, add.density = TRUE, divide.by = group.col, 
+	figure.title = paste0("New PMA vs Unstimulated Multi Plot"))
+make.multi.plot(cell.sub, "UMAP_X", "UMAP_Y", "Population", group.col, col.type = 'factor',
+	figure.title = paste0("New Multi Plot"))
+
+exp = do.aggregate(cell.dat, cellular.cols, by = "Population")
+make.pheatmap(exp, "Population", cellular.cols, file.name = "New Pheatmap by Population.png")
+
+#seperate by vaccination
+cell.sub.unvac = subset(cell.sub, Vaccination == "No")
+cell.sub.vac = subset(cell.sub, Vaccination == "Yes")
+
+#generate multi plots to compare groups/samples
+make.multi.plot(cell.sub.vac, "UMAP_X", "UMAP_Y", "Population", group.col, col.type = 'factor', 
+	add.density = TRUE, figure.title = paste0("New Vacc Multi Plot"))
+
+make.multi.plot(cell.sub.unvac, "UMAP_X", "UMAP_Y", "Population", group.col, col.type = 'factor', 
+	add.density = TRUE, figure.title = paste0("New Unvacc Multi Plot"))
+gc()
+
+#write annotated data
+fwrite(cell.dat, "Annotated.data.csv")
+fwrite(cell.sub, "Annotated.data.DR.csv")
+#create subfolders for the .fcs files 
+dir.create('FCS files - all', showWarnings = FALSE)
+dir.create('FCS files - DR', showWarnings = FALSE)
+#write .fcs files
+setwd('FCS files - all')
+write.files(cell.dat, file.prefix = exp.name, divide.by = group.col, write.csv = FALSE, write.fcs = TRUE)
+#write dimensionality reduced .fcs files 
+setwd(OutputDirectory)
+setwd("Output 4 - annotation/FCS files - DR")
+write.files(cell.sub, file.prefix = paste0('DR-', exp.name), divide.by = group.col, write.csv = FALSE, write.fcs = TRUE)
+
+#create new output subfolder
+setwd(OutputDirectory)
+dir.create("Output 5 - summary data", showWarnings = FALSE)
+setwd("Output 5 - summary data")
+
+#setup nonparametric tests
+variance.test = 'kruskal.test'
+pairwise.test = "wilcox.test"
+#set comparison groups
+as.matrix(unique(cell.dat[[group.col]])) ###modify to make appropriate comparisons
+
+comparisons = list(c("PI", "Untreated")) #####################################################################
+grp.order = c("Untreated", "PI") #############################################################################
+
+#select columns to measure MFI (can also use "aligned.cellular.cols")
+as.matrix(cellular.cols)
+
+dyn.cols = cellular.cols[c(1:11)] ############################################################################
+
+#create summary tables
+sum.dat = create.sumtable(dat = cell.dat, sample.col = sample.col, pop.col = "Population", use.cols = dyn.cols, 
+	annot.cols = c(group.col, batch.col), counts = counts)
+
+#specify which columns we want to plot
+annot.cols = c(group.col, batch.col)
+as.matrix(names(sum.dat))
+
+plot.cols = names(sum.dat)[c(4:237)] #######################################################################
+
+#reorder summary data and SAVE
+sum.dat = do.reorder(sum.dat, group.col, grp.order) 
+sum.dat[,c(1:3)]
+fwrite(sum.dat, 'sum.dat.csv')
+
+#create new Output 5 subfolder
+dir.create("Autographs", showWarnings = FALSE)
+setwd("Autographs")
+
+#autographs
+for(i in plot.cols) {measure = gsub("\\ --.*", "", i)
+	measure
+	pop = gsub("^[^--]*.-- ", "", i)
+    pop
+	make.autograph(sum.dat, x.axis = group.col, y.axis = i, y.axis.label = measure, grp.order = grp.order,
+	my_comparisons = comparisons, Variance_test = variance.test, Pairwise_test = pairwise.test,
+	title = pop, subtitle = measure, filename = paste0(i, ".png"))}
+
+#create new output subfolder
+setwd(OutputDirectory)
+setwd("Output 5 - summary data")
+dir.create("Heatmaps", showWarnings = FALSE)
+setwd("Heatmaps")
+
+#Z-score calculation
+sum.dat.z = do.zscore(sum.dat, plot.cols)
+# Group
+t.first = match(grp.order, sum.dat.z[[group.col]])
+t.first = t.first -1
+
+#heatmap
+make.pheatmap(sum.dat.z, sample.col = sample.col, plot.cols = paste0(plot.cols, '_zscore'), is.fold = TRUE,
+plot.title = 'Z-score', annot.cols = annot.cols, dendrograms = 'column', row.sep = t.first, cutree_cols = 3)
+
+#session info and metadata
+setwd(OutputDirectory)
+dir.create("Output - info", showWarnings = FALSE)
+setwd("Output - info")
+sink(file = "session_info.txt", append=TRUE, split=FALSE, type = c("output", "message"))
+session_info()
+sink()
+write(aligned.cellular.cols, "cellular.cols.txt")
+write(aligned.cluster.cols, "cluster.cols.txt")
