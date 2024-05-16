@@ -1,0 +1,25 @@
+#load libraries
+library(readxl)
+library(tidyverse)
+library(ggpubr)
+
+PlotFonts = font("title", size = 40, face = "bold") + font("xlab", size = 40, face = "bold") + 
+	font("ylab", size = 40, face = "bold") + font("xy.text", size = 40) +
+ 	font("legend.title", size = 40, face = "bold") + font("legend.text", size = 40)
+
+#import data
+Supp_Fig6 = read_excel("Supp_Fig6_Source data file.xlsx")
+
+#remove PB24
+Supp_Fig6 = subset(Supp_Fig6, SampleID != "PB24")
+
+Supp_Fig6[Supp_Fig6 == "Undetermined"] = NA
+Supp_Fig6$GenomicN = as.numeric(Supp_Fig6$GenomicN)
+
+#graph
+png(file = "Supp Figure 6.png", width = 1000, height = 1000)
+ggdotchart(Supp_Fig6, x = "SampleID", y = "GenomicN", xlab = "", ylab = "Ct Mean Values", color = "Tissue", 
+	sorting = "ascending", rotate = TRUE, dot.size = 12, y.text.col = FALSE, group = "Status",
+	ticks = TRUE) + theme_cleveland() + border("gray20") + theme(plot.margin = margin(0.2, 2, 0.1, 0.2, "cm")) +
+	scale_y_continuous(n.breaks = 6) + PlotFonts 
+dev.off()	
