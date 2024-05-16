@@ -1,0 +1,43 @@
+#load libraries
+library(readxl)
+library(corrplot)
+library(Hmisc)
+library(tidyverse)
+
+#settings
+PlotFonts = font("title", size = 40, face="bold") + font("xlab", size = 40, face = "bold") + 
+	font("ylab", size = 40, face = "bold") + font("xy.text", size = 40) +  
+	font("legend.title", size = 30, face = "bold") + font("legend.text",  size = 30)
+	
+flattenCorrMatrix = function(cormat, pmat) {ut = upper.tri(cormat)
+	data.frame(row = rownames(cormat)[row(cormat)[ut]], column = rownames(cormat)[col(cormat)[ut]], 
+	cor = (cormat)[ut], p = pmat[ut])}
+	
+#import data
+Figure_4a = read_excel("C:/Users/Chrysostomos Perdios/OneDrive - Tulane University/Clovis/Long Covid paper/Data/Figure 4_Source data file.xlsx", 
+	sheet = "Figure 4a")
+
+Figure_4a = Figure_4a %>% rename("Week1" = "Week1 Glucose (mg/dL)", "Week4" = "Week4 Glucose (mg/dL)", "Week8" = "Week8 Glucose (mg/dL)",
+	"Week16" = "Week16 Glucose (mg/dL)")
+
+#Correlations
+corr = rcorr(as.matrix(Figure_4a[c(2:length(Figure_4a))]), type = "spearman")
+
+png(width = 1000, height = 1000, file = "Figurer 4a.png")
+corrplot(corr$r, number.cex = 2, tl.col = "black", tl.cex = 3, method = "circle",  pch.cex = 5, cl.cex = 2,
+	 type = "lower", diag = FALSE, p.mat = corr$P, insig = "label_sig")
+dev.off()
+
+png(width = 1000, height = 1000, file = "Figurer S4a.png")
+corrplot(corr$r, number.cex = 1.4, tl.col = "black", tl.cex = 3, method = "color",  pch.cex = 5, cl.cex = 2,
+	 type = "lower", diag = FALSE, addCoef.col = "black")
+dev.off()
+
+png(width = 1000, height = 1000, file = "Figurer S4b.png")
+corrplot(corr$P, number.cex = 1.4, tl.col = "black", tl.cex = 3, method = "color",  pch.cex = 5, cl.cex = 2,
+	 type = "lower", diag = FALSE, col = COL1("YlOrRd", 100), col.lim = c(0, 1), addCoef.col = "black")
+dev.off()
+
+spearman = flattenCorrMatrix(corr$r, corr$P)
+spearman$BH = p.adjust(spearman$p, method = "BH")
+write.csv(spearman, row.names = FALSE, file = "Spearman.csv")
